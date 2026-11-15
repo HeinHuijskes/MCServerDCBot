@@ -1,8 +1,7 @@
 import discord
-import minecraft
-from constants import *
+from . import minecraft, PROJECT_ROOT
+from .constants import *
 
-from dotenv import load_dotenv
 from pathlib import Path
 import urllib.parse
 import aiohttp
@@ -12,8 +11,6 @@ import time
 import os
 import re
 
-
-load_dotenv()
 
 REQUIRED_ENV = [
     "DISCORD_TOKEN", "DISCORD_USER_ID", "DISCORD_CHANNEL_ID",
@@ -33,9 +30,8 @@ DEV_ROLE_ID = int(os.getenv("DEV_ROLE_ID"))
 CHAT_CHANNEL_ID = int(os.getenv("DISCORD_CHAT_CHANNEL_ID", "0"))
 
 ## PATHS ##
-MAIN_PATH = Path("~/Projects/MCServerDCBot").expanduser()
-RULES_PATH = MAIN_PATH / "info" / "server_rules.txt"
-INFO_PATH = MAIN_PATH / "info" / "server_info.txt"
+RULES_PATH = PROJECT_ROOT / "info" / "server_rules.txt"
+INFO_PATH = PROJECT_ROOT / "info" / "server_info.txt"
 SERVER_DIR = Path("/opt/minecraft/server")
 LOG_FILE = Path("/opt/minecraft/server/logs/latest.log")
 

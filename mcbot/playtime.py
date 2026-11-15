@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from advancements import level_name, load_names
+from .advancements import level_name, load_names
 
 TICKS_PER_SECOND = 20
 

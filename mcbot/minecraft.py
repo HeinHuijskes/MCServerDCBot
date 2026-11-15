@@ -1,9 +1,6 @@
 import os
 import subprocess
 from mcrcon import MCRcon
-from dotenv import load_dotenv
-
-load_dotenv()
 
 RCON_HOST = os.getenv("RCON_HOST", "127.0.0.1")
 RCON_PORT = int(os.getenv("RCON_PORT", "25575"))

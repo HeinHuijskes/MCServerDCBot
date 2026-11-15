@@ -7,11 +7,9 @@ import time
 import json
 import re
 
-import minecraft
-import advancements
-import playtime
-from constants import *
-from misc import (
+from mcbot import minecraft, advancements, playtime
+from mcbot.constants import *
+from mcbot.misc import (
     TOKEN, CHANNEL_ID, CHAT_CHANNEL_ID, RULES_PATH, INFO_PATH,
     send_message, follow_up, LOG_FILE, SERVER_DIR,
     server_is_running, has_permission, has_dev_permission,
@@ -21,7 +19,7 @@ from misc import (
     send_relay, head_url, get_head_emoji
 )
 
-from chat import LogTailer, parse_log_line
+from mcbot.chat import LogTailer, parse_log_line
 
 tailer = LogTailer(LOG_FILE)
 no_pings = discord.AllowedMentions.none()
