@@ -9,6 +9,7 @@ import re
 
 import minecraft
 import advancements
+import playtime
 from constants import *
 from misc import (
     TOKEN, CHANNEL_ID, CHAT_CHANNEL_ID, RULES_PATH, INFO_PATH,
@@ -482,8 +483,75 @@ async def advanced_top(interaction: discord.Interaction):
     await interaction.followup.send(embed=embed)
 
 
+time_group = DevGroup(name="time", description="Player playtime", guild_only=True)
+
+
+async def dev_player_autocomplete(interaction: discord.Interaction, current: str):
+    if not has_dev_permission(interaction):  # Discord skips command checks for autocomplete
+        return []
+    try:
+        names = await asyncio.to_thread(advancements.load_names, SERVER_DIR)
+    except Exception:
+        return []
+    matches = sorted((n for n in names.values() if current.lower() in n.lower()), key=str.lower)
+    return [discord.app_commands.Choice(name=n, value=n) for n in matches[:25]]
+
+
+@time_group.command(name="show", description="Show how long a player has played on the server")
+@discord.app_commands.describe(playername="Minecraft username")
+@discord.app_commands.autocomplete(playername=dev_player_autocomplete)
+async def time_show(interaction: discord.Interaction, playername: str):
+    await interaction.response.defer(ephemeral=True)
+    try:
+        data = await asyncio.to_thread(playtime.load_playtimes, SERVER_DIR)
+    except Exception:
+        log.exception("Couldn't read playtime data")
+        await interaction.followup.send(MSG_FAIL("Couldn't read playtime data."), ephemeral=True)
+        return
+
+    name = next((n for n in data if n.lower() == playername.lower()), None)
+    if name is None:
+        await interaction.followup.send(
+            f"No playtime data found for **{discord.utils.escape_markdown(playername)}**.", ephemeral=True)
+        return
+
+    embed = discord.Embed(title=name, color=discord.Color.blue())
+    embed.set_thumbnail(url=head_url(name))
+    embed.add_field(name="Time played", value=playtime.format_duration(data[name]), inline=False)
+    await interaction.followup.send(embed=embed, ephemeral=True)
+
+
+@time_group.command(name="top", description="Show the players with the most playtime")
+async def time_top(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+    try:
+        data = await asyncio.to_thread(playtime.load_playtimes, SERVER_DIR)
+    except Exception:
+        log.exception("Couldn't read playtime data")
+        await interaction.followup.send(MSG_FAIL("Couldn't read playtime data."), ephemeral=True)
+        return
+
+    ranking = sorted(data.items(), key=lambda kv: (-kv[1], kv[0].lower()))[:10]
+    if not ranking:
+        await interaction.followup.send("No playtime data yet.", ephemeral=True)
+        return
+
+    medals = ["🥇", "🥈", "🥉"]
+    lines = []
+    for i, (name, seconds) in enumerate(ranking):
+        place = medals[i] if i < 3 else f"`{i + 1}.`"
+        icon = await get_head_emoji(bot, name)
+        lines.append(f"{place} {icon} **{discord.utils.escape_markdown(name)}** — {playtime.format_duration(seconds)}")
+
+    embed = discord.Embed(title="⏱️ Playtime leaderboard", description="\n".join(lines),
+                          color=discord.Color.blue())
+    embed.set_footer(text=f"Total across all players: {playtime.format_duration(sum(data.values()))}")
+    await interaction.followup.send(embed=embed, ephemeral=True)
+
+
 bot.tree.add_command(whitelist_group)
 bot.tree.add_command(advanced_group)
+bot.tree.add_command(time_group)
 
 if __name__ == "__main__":
     bot.run(TOKEN, root_logger=True)
