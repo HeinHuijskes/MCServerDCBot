@@ -4,6 +4,8 @@ from constants import *
 
 from dotenv import load_dotenv
 from pathlib import Path
+import urllib.parse
+import logging
 import asyncio
 import time
 import os
@@ -31,6 +33,14 @@ CHAT_CHANNEL_ID = int(os.getenv("DISCORD_CHAT_CHANNEL_ID", "0"))
 main_path = Path("~/Projects/MCServerDCBot").expanduser()
 rules_path = main_path / "info" / "server_rules.txt"
 info_path = main_path / "info" / "server_info.txt"
+
+
+## CHAT LOGGING WEBHOOK ##
+log = logging.getLogger("mcbot")   # same logger as in bot.py, matched by name
+CHAT_WEBHOOK_NAME = "Minecraft"   # name shown for server events (joins, deaths, ...)
+NO_PINGS = discord.AllowedMentions.none()   # stops "@everyone" typed in-game from pinging
+chat_webhook = None
+webhooks_disabled = False
 
 
 ########################
@@ -146,6 +156,43 @@ def get_spark_health_url(offset: int = 0, timeout: int = 5):
         time.sleep(0.5)
 
     return None
+
+
+def head_url(player: str) -> str:
+    return f"https://mc-heads.net/avatar/{urllib.parse.quote(player)}/128"
+
+
+async def get_chat_webhook(channel):
+    global chat_webhook
+    if chat_webhook is None:
+        for hook in await channel.webhooks():
+            if hook.name == CHAT_WEBHOOK_NAME and hook.user and hook.user.id == channel.guild.me.id:
+                chat_webhook = hook
+                break
+        else:
+            chat_webhook = await channel.create_webhook(name=CHAT_WEBHOOK_NAME)
+    return chat_webhook
+
+
+async def send_relay(channel, plain, content=None, username=None, avatar=None):
+    """Send with a custom name/avatar. Falls back to a plain bot message if that fails."""
+    global webhooks_disabled
+    if not webhooks_disabled:
+        try:
+            hook = await get_chat_webhook(channel)
+            kwargs = {"allowed_mentions": NO_PINGS}
+            if username:
+                kwargs["username"] = username
+            if avatar:
+                kwargs["avatar_url"] = avatar
+            await hook.send(content or plain, **kwargs)
+            return
+        except discord.Forbidden:
+            webhooks_disabled = True
+            log.warning("Missing Manage Webhooks permission; using plain bot messages instead")
+        except discord.HTTPException:
+            log.warning("Webhook send failed; falling back to a plain message", exc_info=True)
+    await channel.send(plain, allowed_mentions=NO_PINGS)
 
 
 def get_tellraw_message(message):

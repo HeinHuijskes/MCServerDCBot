@@ -16,6 +16,7 @@ from misc import (
     DevGroup, ServerOffline, is_dev_only,
     ShutdownConfirmView, wait_for_server_ready,
     get_log_size, get_spark_health_url, get_tellraw_message,
+    send_relay, head_url
 )
 
 from chat import LogTailer, parse_log_line
@@ -74,8 +75,12 @@ async def chat_relay():
         esc = discord.utils.escape_markdown
 
         if kind == "chat":
-            text = f"**{esc(event[1])}**: {esc(event[2])}"
-        elif kind == "join":
+            _, name, msg = event
+            await send_relay(channel, f"**{esc(name)}**: {esc(msg)}",
+                             content=esc(msg), username=name, avatar=head_url(name))
+            continue
+
+        if kind == "join":
             text = f"➡️ **{esc(event[1])}** joined the game"
         elif kind == "leave":
             text = f"⬅️ **{esc(event[1])}** left the game"
@@ -85,10 +90,10 @@ async def chat_relay():
             text = f"{icon} **{esc(name)}** has {verb} **{esc(title)}**"
         elif kind == "death":
             text = f"💀 **{esc(event[1])}** {esc(event[2])}"
-        else:  # other system messages, such as deaths
+        else:
             text = f"ℹ️ {esc(event[1])}"
 
-        await channel.send(text, allowed_mentions=no_pings)
+        await send_relay(channel, text)
 
 
 @chat_relay.before_loop
