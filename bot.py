@@ -263,20 +263,15 @@ async def serverrules(interaction: discord.Interaction):
 async def help_command(interaction: discord.Interaction):
 
     # Automatically list registered commands
-    command_list = ["These commands can be used when you have the \"MC Player\" role."]
+    command_list = []
 
     for command in bot.tree.get_commands():
-        if command.name == "help":
-            permission = "Everyone"
-        elif command.name in ("serverstatus", "startserver"):
-            permission = "MC Player role or server owner"
-        else:
-            permission = "Everyone"
+        if "(dev only)" in command.description:
+            continue
 
         command_list.append(
             f"**/{command.name}**\n"
-            f"{command.description}\n"
-            f"*Access: {permission}*"
+            f"{command.description}"
         )
 
     # Read joining instructions
