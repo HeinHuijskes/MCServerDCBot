@@ -62,7 +62,7 @@ async def inactivity_monitor():
         return
 
     try:
-        player_count, _ = await asyncio.to_thread(minecraft.get_online_players)
+        player_count, _ = minecraft.get_online_players()
 
         if player_count > 0:
             empty_since = None
@@ -75,7 +75,7 @@ async def inactivity_monitor():
 
         if time.monotonic() - empty_since >= INACTIVITY_LIMIT:
             log.info("Inactivity limit reached. Stopping server.")
-            await asyncio.to_thread(minecraft.stop_server)
+            minecraft.stop_server()
 
             # Wait for systemd to confirm the server has stopped
             for _ in range(30):
@@ -131,7 +131,7 @@ async def serverstatus(interaction: discord.Interaction):
         return
 
     try:
-        player_count, player_names = await asyncio.to_thread(minecraft.get_online_players)
+        player_count, player_names = minecraft.get_online_players()
 
         player_list = "\n".join(
             f"• {name}" for name in player_names
@@ -141,7 +141,8 @@ async def serverstatus(interaction: discord.Interaction):
             f"{MSG_ONLINE}\nPlayers: {player_count}\n\n**Online players:**\n{player_list}"
         )
 
-    except Exception:
+    except Exception as e:
+        log.exception(f"Exception: `{e}`")
         await interaction.followup.send(MSG_STARTING)
 
 
@@ -227,7 +228,7 @@ async def sparkhealth(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     try:
         offset = get_log_size()
-        await asyncio.to_thread(minecraft.send_command, "spark health")
+        minecraft.send_command("spark health")
         url = await asyncio.to_thread(get_spark_health_url, offset)
         if url:
             await follow_up(interaction, f"{MSG_SPARK}{url}")
@@ -250,7 +251,7 @@ async def godtext(interaction: discord.Interaction, message: str):
 
     try:
         command = f"tellraw @a {json.dumps(get_tellraw_message(message), ensure_ascii=False)}"
-        await asyncio.to_thread(minecraft.send_command, command)
+        minecraft.send_command(command)
         await follow_up(interaction, f"Message sent!\n> {message}")
 
     except Exception as e:
@@ -269,32 +270,32 @@ whitelist_group = DevGroup(name="whitelist", description="Manage the Minecraft w
 @check(server_is_running)
 async def whitelist_add(interaction: discord.Interaction, playername: str):
     if not PLAYER_NAME.match(playername):
-        await send_message(interaction, MSG_FAIL("Invalid player name."), ephemeral=True)
+        await send_message(interaction, MSG_FAIL(MSG_INVALID), ephemeral=True)
         return
 
     await interaction.response.defer(ephemeral=True)
 
     try:
-        result = await asyncio.to_thread(minecraft.send_command, f"whitelist add {playername}")
-        await follow_up(interaction, f"✅ Whitelist add result:\n```{result or 'Command executed.'}```")
+        result = minecraft.send_command(f"whitelist add {playername}")
+        await follow_up(interaction, MSG_SUCCEED(result))
     except Exception as e:
-        await follow_up(interaction, f"❌ Failed to add player: `{e}`")
+        await follow_up(interaction, MSG_FAIL(e))
 
 
 @whitelist_group.command(name="remove", description="Remove a player from the whitelist")
 @check(server_is_running)
 async def whitelist_remove(interaction: discord.Interaction, playername: str):
     if not PLAYER_NAME.match(playername):
-        await send_message(interaction, MSG_FAIL("Invalid player name."), ephemeral=True)
+        await send_message(interaction, MSG_FAIL(MSG_INVALID), ephemeral=True)
         return
 
     await interaction.response.defer(ephemeral=True)
 
     try:
-        result = await asyncio.to_thread(minecraft.send_command, f"whitelist remove {playername}")
-        await follow_up(interaction, f"✅ Whitelist remove result:\n```{result or 'Command executed.'}```")
+        result = minecraft.send_command(f"whitelist remove {playername}")
+        await follow_up(interaction, MSG_SUCCEED(result))
     except Exception as e:
-        await follow_up(interaction, f"❌ Failed to remove player: `{e}`")
+        await follow_up(interaction, MSG_FAIL(e))
 
 
 @whitelist_group.command(name="list", description="List all whitelisted players")
@@ -303,18 +304,15 @@ async def whitelist_list(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
 
     try:
-        result = await asyncio.to_thread(minecraft.send_command, "whitelist list")
+        result = minecraft.send_command("whitelist list")
 
         names = result.split(": ", 1)[1].split(", ") if ": " in result else []
         listing = "".join(f"{i}. {name}\n" for i, name in enumerate(names, 1))
 
-        await follow_up(
-            interaction,
-            f"📋 **Minecraft Whitelist:**\n```{listing or 'The whitelist is empty.'}```"
-        )
+        await follow_up(interaction, MSG_WHITELIST+listing)
 
     except Exception as e:
-        await follow_up(interaction, f"❌ Failed to retrieve whitelist: `{e}`")
+        await follow_up(interaction, MSG_FAIL(e))
 
 
 bot.tree.add_command(whitelist_group)

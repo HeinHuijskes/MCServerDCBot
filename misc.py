@@ -179,7 +179,7 @@ class ShutdownConfirmView(discord.ui.View):
         super().__init__(timeout=60)
         self.interaction = interaction  # the original /shutdown interaction
 
-    @discord.ui.button(label="Confirm shutdown", style=discord.ButtonStyle.danger, emoji="🛑")
+    @discord.ui.button(label="Confirm shutdown", style=discord.ButtonStyle.danger, emoji="✅")
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.stop()  # prevents on_timeout from overwriting the result later
 
@@ -187,23 +187,22 @@ class ShutdownConfirmView(discord.ui.View):
             return await no_permission(interaction)
 
         if not await asyncio.to_thread(minecraft.is_server_running):
-            await interaction.response.edit_message(content="ℹ️ Minecraft is already offline.", view=None)
+            await interaction.response.edit_message(content=MSG_OFFLINE, view=None)
             return
 
-        # Respond immediately, then do the slow RCON call
-        await interaction.response.edit_message(content="⏳ Sending shutdown command...", view=None)
+        await interaction.response.edit_message(content=MSG_SHUT_CMD, view=None)
         try:
-            await asyncio.to_thread(minecraft.stop_server)
+            minecraft.stop_server()
             await interaction.edit_original_response(
-                content="🛑 **Shutdown command sent!** Minecraft is saving the world and shutting down."
+                content=MSG_SHUTTING
             )
         except Exception as e:
-            await interaction.edit_original_response(content=f"❌ Failed to shut down: `{e}`")
+            await interaction.edit_original_response(content=MSG_FAIL(e))
 
-    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary, emoji="✖️")
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary, emoji="❌")
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.stop()
-        await interaction.response.edit_message(content="✅ Shutdown cancelled.", view=None)
+        await interaction.response.edit_message(content=MSG_NO_SHUT, view=None)
 
     async def on_timeout(self):
         try:
