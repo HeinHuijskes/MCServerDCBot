@@ -25,7 +25,6 @@ def send_command(command):
         return rcon.command(command)
 
 
-
 def get_online_players():
     """Return the number of online players and their usernames."""
     response = send_command("list")

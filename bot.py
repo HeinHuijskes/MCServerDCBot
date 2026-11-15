@@ -1,19 +1,17 @@
-import os
-import asyncio
 import discord
-
-import time
 from discord.ext import tasks
-
-from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
 
-import minecraft
+import asyncio
+import time
 
+import os
 import re
-from pathlib import Path
 import json
+from pathlib import Path
+
+import minecraft
 
 load_dotenv()
 
@@ -28,6 +26,43 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 
 empty_since = None
+
+########################
+### HELPER FUNCTIONS ###
+########################
+
+async def no_permission(interaction: discord.Interaction):
+    '''Report back insufficient permission.'''
+    await interaction.response.send_message(
+        "❌ You don't have permission to use this command.",
+        ephemeral=True
+    )
+
+def has_permission(interaction: discord.Interaction):
+    '''Check `MC Player` role permission.'''
+    if interaction.user.id == OWNER_ID:
+        return True
+    if isinstance(interaction.user, discord.Member):
+        return any(role.id == ROLE_ID for role in interaction.user.roles)
+    return False
+
+def has_dev_permission(interaction: discord.Interaction):
+    '''Check `dev` role permission.'''
+    if interaction.user.id == OWNER_ID:
+        return True
+    if isinstance(interaction.user, discord.Member):
+        return any(role.id == DEV_ROLE_ID for role in interaction.user.roles)
+    return False
+
+async def server_is_not_running(interaction: discord.Interaction):
+    await interaction.response.send_message(
+        "❌ Minecraft is currently offline.",
+        ephemeral=True
+    )
+
+#################
+### BOT TASKS ###
+#################
 
 @tasks.loop(seconds=30)
 async def inactivity_monitor():
@@ -73,11 +108,9 @@ async def inactivity_monitor():
         print(f"Inactivity monitor error: {e}")
         empty_since = None
 
-
 @inactivity_monitor.before_loop
 async def before_monitor():
     await bot.wait_until_ready()
-
 
 async def notify_channel(message):
     channel = bot.get_channel(CHANNEL_ID)
@@ -86,7 +119,6 @@ async def notify_channel(message):
         channel = await bot.fetch_channel(CHANNEL_ID)
 
     await channel.send(message)
-
 
 async def wait_for_server_ready(timeout=180):
     start = time.monotonic()
@@ -104,25 +136,6 @@ async def wait_for_server_ready(timeout=180):
 
     return False
 
-
-def has_permission(interaction: discord.Interaction):
-    if interaction.user.id == OWNER_ID:
-        return True
-
-    if isinstance(interaction.user, discord.Member):
-        return any(role.id == ROLE_ID for role in interaction.user.roles)
-
-    return False
-
-
-def has_dev_permission(interaction: discord.Interaction):
-    if interaction.user.id == OWNER_ID:
-        return True
-    if isinstance(interaction.user, discord.Member):
-        return any(role.id == DEV_ROLE_ID for role in interaction.user.roles)
-    return False
-
-
 @bot.event
 async def on_ready():
     await bot.tree.sync()
@@ -133,18 +146,17 @@ async def on_ready():
     print(f"Logged in as {bot.user}")
 
 
+#############################
+### SERVER SLASH COMMANDS ###
+#############################
+
 @bot.tree.command(
     name="serverstatus",
     description="Check Minecraft server status"
 )
 async def serverstatus(interaction: discord.Interaction):
-
     if not has_permission(interaction):
-        await interaction.response.send_message(
-            "You are not authorised to use this command.",
-            ephemeral=True
-        )
-        return
+        return no_permission(interaction)
 
     if not await asyncio.to_thread(minecraft.is_server_running):
         await interaction.response.send_message(
@@ -177,13 +189,8 @@ async def serverstatus(interaction: discord.Interaction):
     description="Start the Minecraft server"
 )
 async def startserver(interaction: discord.Interaction):
-
     if not has_permission(interaction):
-        await interaction.response.send_message(
-            "You are not authorised to use this command.",
-            ephemeral=True
-        )
-        return
+        return no_permission(interaction)
 
     if await asyncio.to_thread(minecraft.is_server_running):
         await interaction.response.send_message(
@@ -317,86 +324,16 @@ async def help_command(interaction: discord.Interaction):
 #### DEV COMMANDS ####
 ######################
 
-class ShutdownConfirmView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=60)
-
-    @discord.ui.button(
-        label="Confirm shutdown",
-        style=discord.ButtonStyle.danger,
-        emoji="🛑"
-    )
-    async def confirm(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
-    ):
-        if not has_dev_permission(interaction):
-            await interaction.response.send_message(
-                "❌ You don't have permission.",
-                ephemeral=True
-            )
-            return
-
-        if not minecraft.is_server_running():
-            await interaction.response.edit_message(
-                content="ℹ️ Minecraft is already offline.",
-                view=None
-            )
-            return
-
-        try:
-            minecraft.stop_server()
-
-            await interaction.response.edit_message(
-                content="🛑 **Shutdown command sent!** Minecraft is saving the world and shutting down.",
-                view=None
-            )
-
-        except Exception as e:
-            await interaction.response.edit_message(
-                content=f"❌ Failed to shut down: `{e}`",
-                view=None
-            )
-
-    @discord.ui.button(
-        label="Cancel",
-        style=discord.ButtonStyle.secondary,
-        emoji="✖️"
-    )
-    async def cancel(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
-    ):
-        await interaction.response.edit_message(
-            content="✅ Shutdown cancelled.",
-            view=None
-        )
-
-    async def on_timeout(self):
-        for item in self.children:
-            item.disabled = True
-
-
 @bot.tree.command(
     name="shutdown",
     description="Shut down the Minecraft server (dev only)"
 )
 async def shutdown(interaction: discord.Interaction):
     if not has_dev_permission(interaction):
-        await interaction.response.send_message(
-            "❌ You don't have permission to use this command.",
-            ephemeral=True
-        )
-        return
+        return no_permission(interaction)
 
     if not minecraft.is_server_running():
-        await interaction.response.send_message(
-            "ℹ️ Minecraft is already offline.",
-            ephemeral=True
-        )
-        return
+        return server_is_not_running(interaction)
 
     await interaction.response.send_message(
         "⚠️ **Are you sure you want to shut down Minecraft?**\n"
@@ -408,7 +345,6 @@ async def shutdown(interaction: discord.Interaction):
 
 def get_spark_health_url(timeout=5):
     log_file = Path("/opt/minecraft/server/logs/latest.log")
-
     start_time = time.time()
 
     while time.time() - start_time < timeout:
@@ -433,11 +369,10 @@ def get_spark_health_url(timeout=5):
 @discord.app_commands.default_permissions()
 async def sparkhealth(interaction: discord.Interaction):
     if not has_dev_permission(interaction):
-        await interaction.response.send_message(
-            "❌ You don't have permission to use this command.",
-            ephemeral=True
-        )
-        return
+        return no_permission(interaction)
+
+    if not minecraft.is_server_running():
+        return server_is_not_running(interaction)
 
     await interaction.response.defer(ephemeral=True)
 
@@ -469,18 +404,10 @@ async def sparkhealth(interaction: discord.Interaction):
 )
 async def godtext(interaction: discord.Interaction, message: str):
     if not has_dev_permission(interaction):
-        await interaction.response.send_message(
-            "❌ You don't have permission to use this command.",
-            ephemeral=True
-        )
-        return
+        return no_permission(interaction)
 
     if not minecraft.is_server_running():
-        await interaction.response.send_message(
-            "❌ Minecraft is currently offline.",
-            ephemeral=True
-        )
-        return
+        return server_is_not_running(interaction)
 
     if len(message) > 500:
         await interaction.response.send_message(
@@ -533,11 +460,10 @@ whitelist_group = discord.app_commands.Group(
 @whitelist_group.command(name="add", description="Add a player to the whitelist")
 async def whitelist_add(interaction: discord.Interaction, playername: str):
     if not has_dev_permission(interaction):
-        await interaction.response.send_message(
-            "❌ You don't have permission to use this command.",
-            ephemeral=True
-        )
-        return
+        return no_permission(interaction)
+
+    if not minecraft.is_server_running():
+        return server_is_not_running(interaction)
 
     await interaction.response.defer(ephemeral=True)
 
@@ -557,11 +483,10 @@ async def whitelist_add(interaction: discord.Interaction, playername: str):
 @whitelist_group.command(name="remove", description="Remove a player from the whitelist")
 async def whitelist_remove(interaction: discord.Interaction, playername: str):
     if not has_dev_permission(interaction):
-        await interaction.response.send_message(
-            "❌ You don't have permission to use this command.",
-            ephemeral=True
-        )
-        return
+        return no_permission(interaction)
+
+    if not minecraft.is_server_running():
+        return server_is_not_running(interaction)
 
     await interaction.response.defer(ephemeral=True)
 
@@ -581,11 +506,10 @@ async def whitelist_remove(interaction: discord.Interaction, playername: str):
 @whitelist_group.command(name="list", description="List all whitelisted players")
 async def whitelist_list(interaction: discord.Interaction):
     if not has_dev_permission(interaction):
-        await interaction.response.send_message(
-            "❌ You don't have permission to use this command.",
-            ephemeral=True
-        )
-        return
+        return no_permission(interaction)
+
+    if not minecraft.is_server_running():
+        return server_is_not_running(interaction)
 
     await interaction.response.defer(ephemeral=True)
 
@@ -604,6 +528,66 @@ async def whitelist_list(interaction: discord.Interaction):
             f"❌ Failed to retrieve whitelist: `{e}`",
             ephemeral=True
         )
+
+
+### SHUTDOWNCONFIRMVIEW ###
+
+class ShutdownConfirmView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=60)
+
+    @discord.ui.button(
+        label="Confirm shutdown",
+        style=discord.ButtonStyle.danger,
+        emoji="🛑"
+    )
+    async def confirm(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        if not has_dev_permission(interaction):
+            return no_permission(interaction)
+
+        if not minecraft.is_server_running():
+            await interaction.response.edit_message(
+                content="ℹ️ Minecraft is already offline.",
+                view=None
+            )
+            return
+
+        try:
+            minecraft.stop_server()
+
+            await interaction.response.edit_message(
+                content="🛑 **Shutdown command sent!** Minecraft is saving the world and shutting down.",
+                view=None
+            )
+
+        except Exception as e:
+            await interaction.response.edit_message(
+                content=f"❌ Failed to shut down: `{e}`",
+                view=None
+            )
+
+    @discord.ui.button(
+        label="Cancel",
+        style=discord.ButtonStyle.secondary,
+        emoji="✖️"
+    )
+    async def cancel(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        await interaction.response.edit_message(
+            content="✅ Shutdown cancelled.",
+            view=None
+        )
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
 
 
 bot.tree.add_command(whitelist_group)
