@@ -40,6 +40,15 @@ def load_names(server_dir: Path) -> dict:
     return names
 
 
+def known_players(server_dir: Path) -> list:
+    """Names of players with a save file, i.e. who have actually joined the server."""
+    adv_dir = advancement_dir(server_dir)
+    if adv_dir is None:
+        return []
+    names = load_names(server_dir)
+    return [names[f.stem.lower()] for f in adv_dir.glob("*.json") if f.stem.lower() in names]
+
+
 def load_vanilla(server_dir: Path):
     """Read titles and the list of real advancements from the server jar (cached)."""
     global _vanilla

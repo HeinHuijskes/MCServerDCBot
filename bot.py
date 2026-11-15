@@ -408,10 +408,10 @@ async def player_autocomplete(interaction: discord.Interaction, current: str):
     if not has_permission(interaction):
         return []
     try:
-        names = await asyncio.to_thread(advancements.load_names, SERVER_DIR)
+        names = await asyncio.to_thread(advancements.known_players, SERVER_DIR)
     except Exception:
         return []
-    matches = sorted((n for n in names.values() if current.lower() in n.lower()), key=str.lower)
+    matches = sorted((n for n in names if current.lower() in n.lower()), key=str.lower)
     return [discord.app_commands.Choice(name=n, value=n) for n in matches[:25]]
 
 
@@ -490,10 +490,10 @@ async def dev_player_autocomplete(interaction: discord.Interaction, current: str
     if not has_dev_permission(interaction):  # Discord skips command checks for autocomplete
         return []
     try:
-        names = await asyncio.to_thread(advancements.load_names, SERVER_DIR)
+        names = await asyncio.to_thread(advancements.known_players, SERVER_DIR)
     except Exception:
         return []
-    matches = sorted((n for n in names.values() if current.lower() in n.lower()), key=str.lower)
+    matches = sorted((n for n in names if current.lower() in n.lower()), key=str.lower)
     return [discord.app_commands.Choice(name=n, value=n) for n in matches[:25]]
 
 
