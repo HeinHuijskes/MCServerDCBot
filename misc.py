@@ -12,6 +12,7 @@ import time
 import os
 import re
 
+
 load_dotenv()
 
 REQUIRED_ENV = [
@@ -22,6 +23,7 @@ missing = [name for name in REQUIRED_ENV if not os.getenv(name)]
 if missing:
     raise SystemExit(f"Missing required .env variables: {', '.join(missing)}")
 
+
 ## ENV VARIABLES ##
 TOKEN = os.getenv("DISCORD_TOKEN")
 OWNER_ID = int(os.getenv("DISCORD_USER_ID", "0"))
@@ -31,9 +33,11 @@ DEV_ROLE_ID = int(os.getenv("DEV_ROLE_ID"))
 CHAT_CHANNEL_ID = int(os.getenv("DISCORD_CHAT_CHANNEL_ID", "0"))
 
 ## PATHS ##
-main_path = Path("~/Projects/MCServerDCBot").expanduser()
-rules_path = main_path / "info" / "server_rules.txt"
-info_path = main_path / "info" / "server_info.txt"
+MAIN_PATH = Path("~/Projects/MCServerDCBot").expanduser()
+RULES_PATH = MAIN_PATH / "info" / "server_rules.txt"
+INFO_PATH = MAIN_PATH / "info" / "server_info.txt"
+SERVER_DIR = Path("/opt/minecraft/server")
+LOG_FILE = Path("/opt/minecraft/server/logs/latest.log")
 
 
 ## CHAT LOGGING WEBHOOK ##
@@ -125,9 +129,6 @@ async def wait_for_server_ready(timeout=180):
             await asyncio.sleep(5)
 
     return False
-
-
-LOG_FILE = Path("/opt/minecraft/server/logs/latest.log")
 
 
 def get_log_size() -> int:
@@ -247,6 +248,12 @@ class DevGroup(discord.app_commands.Group):
     '''A command group whose subcommands all require the dev role.'''
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         return has_dev_permission(interaction)
+
+
+class PlayerGroup(discord.app_commands.Group):
+    '''A command group whose subcommands require the MC Player role.'''
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return has_permission(interaction)
 
 
 class ServerOffline(discord.app_commands.CheckFailure):

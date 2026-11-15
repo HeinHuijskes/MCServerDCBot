@@ -8,12 +8,13 @@ import json
 import re
 
 import minecraft
+import advancements
 from constants import *
 from misc import (
-    TOKEN, CHANNEL_ID, CHAT_CHANNEL_ID, rules_path, info_path,
-    send_message, follow_up, LOG_FILE,
+    TOKEN, CHANNEL_ID, CHAT_CHANNEL_ID, RULES_PATH, INFO_PATH,
+    send_message, follow_up, LOG_FILE, SERVER_DIR,
     server_is_running, has_permission, has_dev_permission,
-    DevGroup, ServerOffline, is_dev_only,
+    DevGroup, PlayerGroup, ServerOffline, is_dev_only,
     ShutdownConfirmView, wait_for_server_ready,
     get_log_size, get_spark_health_url, get_tellraw_message,
     send_relay, head_url, get_head_emoji
@@ -254,7 +255,7 @@ async def startserver(interaction: discord.Interaction):
 @bot.tree.command(name="serverrules", description="Display the Minecraft server rules")
 async def serverrules(interaction: discord.Interaction):
     try:
-        with open(rules_path, "r", encoding="utf-8") as file:
+        with open(RULES_PATH, "r", encoding="utf-8") as file:
             rules = file.read().strip()
     except FileNotFoundError:
         rules = ""
@@ -271,7 +272,7 @@ async def help_command(interaction: discord.Interaction):
         (dev_commands if is_dev_only(command) else user_commands).append(entry)
 
     try:
-        with open(info_path, "r", encoding="utf-8") as file:
+        with open(INFO_PATH, "r", encoding="utf-8") as file:
             server_info = file.read().strip()
     except FileNotFoundError:
         server_info = ""
@@ -399,7 +400,90 @@ async def whitelist_list(interaction: discord.Interaction):
         await follow_up(interaction, MSG_FAIL(e))
 
 
+advanced_group = PlayerGroup(name="advanced", description="Advancement statistics", guild_only=True)
+
+
+async def player_autocomplete(interaction: discord.Interaction, current: str):
+    if not has_permission(interaction):
+        return []
+    try:
+        names = await asyncio.to_thread(advancements.load_names, SERVER_DIR)
+    except Exception:
+        return []
+    matches = sorted((n for n in names.values() if current.lower() in n.lower()), key=str.lower)
+    return [discord.app_commands.Choice(name=n, value=n) for n in matches[:25]]
+
+
+@advanced_group.command(name="show", description="Show a player's advancement progress")
+@discord.app_commands.describe(playername="Minecraft username")
+@discord.app_commands.autocomplete(playername=player_autocomplete)
+async def advanced_show(interaction: discord.Interaction, playername: str):
+    await interaction.response.defer()
+    try:
+        data = await asyncio.to_thread(advancements.load_all, SERVER_DIR)
+    except Exception:
+        log.exception("Couldn't read advancement data")
+        await interaction.followup.send(MSG_FAIL("Couldn't read advancement data."), ephemeral=True)
+        return
+
+    name = next((n for n in data if n.lower() == playername.lower()), None)
+    if name is None:
+        await interaction.followup.send(
+            f"No advancement data found for **{discord.utils.escape_markdown(playername)}**.", ephemeral=True)
+        return
+
+    done = data[name]
+    total = advancements.total_count(SERVER_DIR)
+    if total:
+        filled = round(10 * len(done) / total)
+        progress = f"**{len(done)}** / {total} ({len(done) * 100 // total}%)\n{'█' * filled}{'░' * (10 - filled)}"
+    else:
+        progress = f"**{len(done)}** completed"
+
+    recent = sorted(done.items(), key=lambda kv: kv[1], reverse=True)[:5]
+    lines = []
+    for adv_id, when in recent:
+        suffix = f" — {discord.utils.format_dt(when, 'R')}" if when.timestamp() > 0 else ""
+        lines.append(f"🏆 **{advancements.get_title(SERVER_DIR, adv_id)}**{suffix}")
+
+    embed = discord.Embed(title=name, color=discord.Color.green())
+    embed.set_thumbnail(url=head_url(name))
+    embed.add_field(name="Progress", value=progress, inline=False)
+    embed.add_field(name="Recent advancements", value="\n".join(lines) or "None yet.", inline=False)
+    await interaction.followup.send(embed=embed)
+
+
+@advanced_group.command(name="top", description="Show the players with the most advancements")
+async def advanced_top(interaction: discord.Interaction):
+    await interaction.response.defer()
+    try:
+        data = await asyncio.to_thread(advancements.load_all, SERVER_DIR)
+    except Exception:
+        log.exception("Couldn't read advancement data")
+        await interaction.followup.send(MSG_FAIL("Couldn't read advancement data."), ephemeral=True)
+        return
+
+    ranking = sorted(data.items(), key=lambda kv: (-len(kv[1]), kv[0].lower()))[:10]
+    if not ranking:
+        await interaction.followup.send("No advancement data yet.")
+        return
+
+    total = advancements.total_count(SERVER_DIR)
+    medals = ["🥇", "🥈", "🥉"]
+    lines = []
+    for i, (name, done) in enumerate(ranking):
+        place = medals[i] if i < 3 else f"`{i + 1}.`"
+        icon = await get_head_emoji(bot, name)
+        count = f"{len(done)} / {total}" if total else str(len(done))
+        lines.append(f"{place} {icon} **{discord.utils.escape_markdown(name)}** — {count}")
+
+    embed = discord.Embed(title="🏆 Advancement leaderboard", description="\n".join(lines),
+                          color=discord.Color.gold())
+    await interaction.followup.send(embed=embed)
+
+
 bot.tree.add_command(whitelist_group)
+bot.tree.add_command(advanced_group)
 
 if __name__ == "__main__":
     bot.run(TOKEN, root_logger=True)
