@@ -6,10 +6,15 @@ _LINE = re.compile(r"^\[[\d:]+\] \[[^\]]+/INFO\]: (?P<msg>.*)$")
 _CHAT = re.compile(r"^(?:\[Not Secure\] )?<(?P<name>[^>]+)> (?P<text>.*)$")
 _JOIN = re.compile(r"^(?:System chat: )?(?P<name>\S+) joined the game$")
 _LEAVE = re.compile(r"^(?:System chat: )?(?P<name>\S+) left the game$")
+_ADVANCEMENT = re.compile(
+    r"^(?:System chat: )?(?P<name>\S+) has (?P<verb>made the advancement|completed the challenge|reached the goal) \[(?P<title>.+)\]$"
+)
+_SYSTEM = re.compile(r"^System chat: (?P<text>.+)$")
 
 
 def parse_log_line(line: str):
-    """Return ("chat", name, text), ("join", name), ("leave", name) or None."""
+    """Return ("chat", name, text), ("join", name), ("leave", name),
+    ("advancement", name, verb, title), ("system", text) or None."""
     match = _LINE.match(line)
     if not match:
         return None
@@ -21,6 +26,12 @@ def parse_log_line(line: str):
         return ("join", m["name"])
     if m := _LEAVE.match(msg):
         return ("leave", m["name"])
+    if m := _ADVANCEMENT.match(msg):
+        return ("advancement", m["name"], m["verb"], m["title"])
+    if m := _SYSTEM.match(msg):
+        if m["text"].startswith("[Discord] "):  # our own relayed messages
+            return None
+        return ("system", m["text"])
     return None
 
 
