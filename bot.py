@@ -10,19 +10,25 @@ import re
 import minecraft
 from constants import *
 from misc import (
-    TOKEN, CHANNEL_ID, rules_path, info_path,
-    send_message, follow_up,
+    TOKEN, CHANNEL_ID, CHAT_CHANNEL_ID, rules_path, info_path,
+    send_message, follow_up, LOG_FILE,
     server_is_running, has_permission, has_dev_permission,
     DevGroup, ServerOffline, is_dev_only,
     ShutdownConfirmView, wait_for_server_ready,
     get_log_size, get_spark_health_url, get_tellraw_message,
 )
 
+from chat import LogTailer, parse_log_line
+
+tailer = LogTailer(LOG_FILE)
+no_pings = discord.AllowedMentions.none()
+
 import logging
 log = logging.getLogger("mcbot")
 
 
 intents = discord.Intents.default()
+intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 INACTIVITY_LIMIT = 900  # seconds with an empty server before auto-shutdown
@@ -51,6 +57,33 @@ async def on_app_command_error(interaction: discord.Interaction, error: AppComma
         await interaction.followup.send(message, ephemeral=True)
     else:
         await send_message(interaction, message, ephemeral=True)
+
+
+@tasks.loop(seconds=1)
+async def chat_relay():
+    channel = bot.get_channel(CHAT_CHANNEL_ID)
+    if channel is None:
+        return
+
+    for line in tailer.read_new_lines():
+        event = parse_log_line(line)
+        if event is None:
+            continue
+
+        kind, name = event[0], discord.utils.escape_markdown(event[1])
+        if kind == "chat":
+            text = f"**{name}**: {discord.utils.escape_markdown(event[2])}"
+        elif kind == "join":
+            text = f"➡️ **{name}** joined the game"
+        else:
+            text = f"⬅️ **{name}** left the game"
+
+        await channel.send(text, allowed_mentions=no_pings)
+
+
+@chat_relay.before_loop
+async def before_chat_relay():
+    await bot.wait_until_ready()
 
 
 @tasks.loop(seconds=30)
@@ -99,6 +132,8 @@ async def before_monitor():
 async def setup_hook():
     await bot.tree.sync()
     inactivity_monitor.start()
+    if CHAT_CHANNEL_ID and not chat_relay.is_running():
+        chat_relay.start()
 
 bot.setup_hook = setup_hook
 
@@ -106,6 +141,25 @@ bot.setup_hook = setup_hook
 @bot.event
 async def on_ready():
     log.info(f"Logged in as {bot.user}")
+
+
+@bot.event
+async def on_message(message: discord.Message):
+    if message.author.bot or not CHAT_CHANNEL_ID or message.channel.id != CHAT_CHANNEL_ID:
+        return
+    if not await asyncio.to_thread(minecraft.is_server_running):
+        return
+
+    text = " ".join(message.clean_content.split())[:256] or "[attachment]"
+    payload = {"text": "", "extra": [
+        {"text": "[Discord] ", "color": "blue", "bold": True},
+        {"text": f"{message.author.display_name}: ", "color": "aqua"},
+        {"text": text, "color": "white"},
+    ]}
+    try:
+        minecraft.send_command(f"tellraw @a {json.dumps(payload, ensure_ascii=False)}")
+    except Exception as e:
+        log.exception(f"Failed to relay Discord message to Minecraft: {e}")
 
 
 async def notify_channel(message):

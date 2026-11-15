@@ -25,6 +25,7 @@ OWNER_ID = int(os.getenv("DISCORD_USER_ID", "0"))
 CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID", "0"))
 ROLE_ID = int(os.getenv("DISCORD_ROLE_ID"))
 DEV_ROLE_ID = int(os.getenv("DEV_ROLE_ID"))
+CHAT_CHANNEL_ID = int(os.getenv("DISCORD_CHAT_CHANNEL_ID", "0"))
 
 ## PATHS ##
 main_path = Path("~/Projects/MCServerDCBot").expanduser()
