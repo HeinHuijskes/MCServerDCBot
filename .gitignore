@@ -1,0 +1,4 @@
+mcbot-venv
+.env
+__pycache__/
+info/*.txt
