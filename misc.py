@@ -5,6 +5,7 @@ from constants import *
 from dotenv import load_dotenv
 from pathlib import Path
 import urllib.parse
+import aiohttp
 import logging
 import asyncio
 import time
@@ -41,6 +42,8 @@ CHAT_WEBHOOK_NAME = "Minecraft"   # name shown for server events (joins, deaths,
 NO_PINGS = discord.AllowedMentions.none()   # stops "@everyone" typed in-game from pinging
 chat_webhook = None
 webhooks_disabled = False
+head_emojis = {}
+head_emojis_loaded = False
 
 
 ########################
@@ -158,9 +161,37 @@ def get_spark_health_url(offset: int = 0, timeout: int = 5):
     return None
 
 
-def head_url(player: str) -> str:
-    return f"https://mc-heads.net/avatar/{urllib.parse.quote(player)}/128"
+def head_url(player: str, size: int = 128) -> str:
+    return f"https://mc-heads.net/avatar/{urllib.parse.quote(player)}/{size}"
 
+
+def emoji_name(player: str) -> str:
+    # Discord emoji names: 2-32 chars, letters/digits/underscores only
+    return "mc_" + re.sub(r"[^A-Za-z0-9_]", "_", player)[:28]
+
+
+async def get_head_emoji(client, player: str) -> str:
+    '''Return the player's head as an emoji string, uploading it on first use. "" on failure.'''
+    global head_emojis_loaded
+    try:
+        if not head_emojis_loaded:
+            for e in await client.fetch_application_emojis():
+                head_emojis[e.name] = e
+            head_emojis_loaded = True
+
+        name = emoji_name(player)
+        if name not in head_emojis:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(head_url(player, 64), timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                    if resp.status != 200:
+                        return ""
+                    image = await resp.read()
+            head_emojis[name] = await client.create_application_emoji(name=name, image=image)
+
+        return str(head_emojis[name])
+    except Exception:
+        log.warning("Couldn't get head emoji for %s", player, exc_info=True)
+        return ""
 
 async def get_chat_webhook(channel):
     global chat_webhook

@@ -16,7 +16,7 @@ from misc import (
     DevGroup, ServerOffline, is_dev_only,
     ShutdownConfirmView, wait_for_server_ready,
     get_log_size, get_spark_health_url, get_tellraw_message,
-    send_relay, head_url
+    send_relay, head_url, get_head_emoji
 )
 
 from chat import LogTailer, parse_log_line
@@ -205,9 +205,11 @@ async def serverstatus(interaction: discord.Interaction):
     try:
         player_count, player_names = minecraft.get_online_players()
 
-        player_list = "\n".join(
-            f"• {name}" for name in player_names
-        ) if player_names else "Nobody is online."
+        lines = []
+        for name in player_names:
+            icon = await get_head_emoji(bot, name) or "•"
+            lines.append(f"{icon} {name}")
+        player_list = "\n".join(lines) if lines else "Nobody is online."
 
         await interaction.followup.send(
             f"{MSG_ONLINE}\nPlayers: {player_count}\n\n**Online players:**\n{player_list}"
