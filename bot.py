@@ -70,13 +70,21 @@ async def chat_relay():
         if event is None:
             continue
 
-        kind, name = event[0], discord.utils.escape_markdown(event[1])
+        kind = event[0]
+        esc = discord.utils.escape_markdown
+
         if kind == "chat":
-            text = f"**{name}**: {discord.utils.escape_markdown(event[2])}"
+            text = f"**{esc(event[1])}**: {esc(event[2])}"
         elif kind == "join":
-            text = f"➡️ **{name}** joined the game"
-        else:
-            text = f"⬅️ **{name}** left the game"
+            text = f"➡️ **{esc(event[1])}** joined the game"
+        elif kind == "leave":
+            text = f"⬅️ **{esc(event[1])}** left the game"
+        elif kind == "advancement":
+            _, name, verb, title = event
+            icon = {"made the advancement": "🏆", "completed the challenge": "🌟", "reached the goal": "🎯"}[verb]
+            text = f"{icon} **{esc(name)}** has {verb} **{esc(title)}**"
+        else:  # other system messages, such as deaths
+            text = f"ℹ️ {esc(event[1])}"
 
         await channel.send(text, allowed_mentions=no_pings)
 
@@ -119,7 +127,10 @@ async def inactivity_monitor():
                 await asyncio.sleep(2)
             empty_since = None
 
-    except Exception as e:
+    except (ConnectionRefusedError, TimeoutError):
+        # server is still booting, RCON isn't open yet 
+        empty_since = None
+    except Exception:
         log.exception("Inactivity monitor error")
         empty_since = None
 
@@ -195,6 +206,8 @@ async def serverstatus(interaction: discord.Interaction):
             f"{MSG_ONLINE}\nPlayers: {player_count}\n\n**Online players:**\n{player_list}"
         )
 
+    except (ConnectionRefusedError, TimeoutError):
+        await interaction.followup.send(MSG_STARTING)
     except Exception as e:
         log.exception(f"Exception: `{e}`")
         await interaction.followup.send(MSG_STARTING)

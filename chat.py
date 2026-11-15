@@ -4,8 +4,8 @@ from pathlib import Path
 # "[17:53:55] [Async Chat Thread - #0/INFO]: <Steve> hello"  (optionally "[Not Secure] ")
 _LINE = re.compile(r"^\[[\d:]+\] \[[^\]]+/INFO\]: (?P<msg>.*)$")
 _CHAT = re.compile(r"^(?:\[Not Secure\] )?<(?P<name>[^>]+)> (?P<text>.*)$")
-_JOIN = re.compile(r"^(?P<name>\S+) joined the game$")
-_LEAVE = re.compile(r"^(?P<name>\S+) left the game$")
+_JOIN = re.compile(r"^(?:System chat: )?(?P<name>\S+) joined the game$")
+_LEAVE = re.compile(r"^(?:System chat: )?(?P<name>\S+) left the game$")
 
 
 def parse_log_line(line: str):
