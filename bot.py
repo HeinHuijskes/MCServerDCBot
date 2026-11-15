@@ -12,6 +12,9 @@ import json
 from pathlib import Path
 
 import minecraft
+from whitelist import *
+from constants import *
+
 
 load_dotenv()
 
@@ -20,6 +23,13 @@ OWNER_ID = int(os.getenv("DISCORD_USER_ID", "0"))
 CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID", "0"))
 ROLE_ID = int(os.getenv("DISCORD_ROLE_ID"))
 DEV_ROLE_ID = int(os.getenv("DEV_ROLE_ID"))
+
+
+## PATHS ##
+main_path = "~/Projects/MCServerDCBOT"
+rules_path = f"{main_path}/info/server_rules.txt"
+info_path = f"{main_path}/info/server_info.txt"
+
 
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -31,12 +41,20 @@ empty_since = None
 ### HELPER FUNCTIONS ###
 ########################
 
+async def send_message(interaction: discord.Interaction, message: str, **kwargs):
+    '''Send a message back'''
+    await interaction.response.send_message(message, **kwargs)
+
+async def follow_up(interaction: discord.Interaction, message: str):
+    '''Follow up on an interaction'''
+    await interaction.followup.send(message)
+
 async def no_permission(interaction: discord.Interaction):
     '''Report back insufficient permission.'''
-    await interaction.response.send_message(
-        "❌ You don't have permission to use this command.",
-        ephemeral=True
-    )
+    await send_message(interaction, MSG_NO_PERMISSION, ephemeral=True)
+
+async def server_is_not_running(interaction: discord.Interaction):
+    await send_message(interaction, MSG_OFFLINE, ephemeral=True)
 
 def has_permission(interaction: discord.Interaction):
     '''Check `MC Player` role permission.'''
@@ -54,11 +72,6 @@ def has_dev_permission(interaction: discord.Interaction):
         return any(role.id == DEV_ROLE_ID for role in interaction.user.roles)
     return False
 
-async def server_is_not_running(interaction: discord.Interaction):
-    await interaction.response.send_message(
-        "❌ Minecraft is currently offline.",
-        ephemeral=True
-    )
 
 #################
 ### BOT TASKS ###
@@ -73,8 +86,7 @@ async def inactivity_monitor():
         return
 
     try:
-        # Keep RCON on the main thread
-        player_count, player_names = minecraft.get_online_players()
+        player_count, _ = minecraft.get_online_players()
 
         if player_count > 0:
             empty_since = None
@@ -89,36 +101,33 @@ async def inactivity_monitor():
 
         if elapsed >= 900:
             print("15 minutes of inactivity. Stopping server.")
-
             minecraft.stop_server()
 
             # Wait for systemd to confirm the server has stopped
             for _ in range(30):
                 if not await asyncio.to_thread(minecraft.is_server_running):
-                    await notify_channel(
-                        "🔴 **Minecraft server has shut down due to inactivity.**"
-                    )
+                    await notify_channel(MSG_SHUTDOWN)
                     break
 
                 await asyncio.sleep(2)
-
             empty_since = None
 
     except Exception as e:
         print(f"Inactivity monitor error: {e}")
         empty_since = None
 
+
 @inactivity_monitor.before_loop
 async def before_monitor():
     await bot.wait_until_ready()
 
+
 async def notify_channel(message):
     channel = bot.get_channel(CHANNEL_ID)
-
     if channel is None:
         channel = await bot.fetch_channel(CHANNEL_ID)
-
     await channel.send(message)
+
 
 async def wait_for_server_ready(timeout=180):
     start = time.monotonic()
@@ -129,20 +138,19 @@ async def wait_for_server_ready(timeout=180):
             continue
 
         try:
-            player_count, player_names = minecraft.get_online_players()
+            _, _ = minecraft.get_online_players()
             return True
         except Exception:
             await asyncio.sleep(5)
 
     return False
 
+
 @bot.event
 async def on_ready():
     await bot.tree.sync()
-
     if not inactivity_monitor.is_running():
         inactivity_monitor.start()
-
     print(f"Logged in as {bot.user}")
 
 
@@ -159,9 +167,7 @@ async def serverstatus(interaction: discord.Interaction):
         return no_permission(interaction)
 
     if not await asyncio.to_thread(minecraft.is_server_running):
-        await interaction.response.send_message(
-            "Minecraft server is offline."
-        )
+        send_message(interaction, MSG_OFFLINE)
         return
 
     try:
@@ -171,17 +177,11 @@ async def serverstatus(interaction: discord.Interaction):
             f"• {name}" for name in player_names
         ) if player_names else "Nobody is online."
 
-        await interaction.response.send_message(
-            f"🟢 **Minecraft is online!**\n"
-            f"Players: {player_count}\n\n"
-            f"**Online players:**\n{player_list}"
-        )
+        message = f"{MSG_ONLINE}\nPlayers: {player_count}\n\n**Online players:**\n{player_list}"
+        send_message(interaction, message)
 
     except Exception as e:
-        await interaction.response.send_message(
-            f"Server is still starting up.",
-            ephemeral=True
-        )
+        send_message(interaction, MSG_STARTING)
 
 
 @bot.tree.command(
@@ -193,34 +193,23 @@ async def startserver(interaction: discord.Interaction):
         return no_permission(interaction)
 
     if await asyncio.to_thread(minecraft.is_server_running):
-        await interaction.response.send_message(
-            "Minecraft is already running!"
-        )
+        send_message(interaction, MSG_ONLINE)
         return
 
     await interaction.response.defer()
 
     try:
         await asyncio.to_thread(minecraft.start_server)
-
         ready = await wait_for_server_ready()
 
         if ready:
-            await notify_channel(
-                "🟢 **Minecraft server is now online!**"
-            )
-            await interaction.followup.send(
-                "Minecraft started successfully!"
-            )
+            notify_channel(MSG_ONLINE)
+            follow_up(interaction, "Minecraft started successfully!")
         else:
-            await interaction.followup.send(
-                "Minecraft did not become ready within 3 minutes."
-            )
+            follow_up(interaction, "Minecraft did not become ready within 3 minutes.")
 
     except Exception as e:
-        await interaction.followup.send(
-            f"Failed to start Minecraft: {e}"
-        )
+        follow_up(interaction, f"Failed to start Minecraft: {e}")
 
 
 @bot.tree.command(
@@ -228,32 +217,12 @@ async def startserver(interaction: discord.Interaction):
     description="Display the Minecraft server rules"
 )
 async def serverrules(interaction: discord.Interaction):
-
-    rules_path = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        "./info/server_rules.txt"
-    )
-
     try:
         with open(rules_path, "r", encoding="utf-8") as file:
             rules = file.read().strip()
-
-        if not rules:
-            await interaction.response.send_message(
-                "The server rules file is empty.",
-                ephemeral=True
-            )
-            return
-
-        await interaction.response.send_message(
-            f"📜 **Minecraft Server Rules**\n\n{rules}"
-        )
-
     except FileNotFoundError:
-        await interaction.response.send_message(
-            "Could not find server_rules.txt.",
-            ephemeral=True
-        )
+        rules = ""
+    send_message(interaction, f"{MSG_RULES}{rules}")
 
 
 @bot.tree.command(
@@ -261,10 +230,7 @@ async def serverrules(interaction: discord.Interaction):
     description="Show bot commands and server joining instructions"
 )
 async def help_command(interaction: discord.Interaction):
-
-    # Automatically list registered commands
     command_list = []
-
     for command in bot.tree.get_commands():
         if "(dev only)" in command.description:
             continue
@@ -274,23 +240,14 @@ async def help_command(interaction: discord.Interaction):
             f"{command.description}"
         )
 
-    # Read joining instructions
-    info_path = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        "./info/server_info.txt"
-    )
-
     try:
         with open(info_path, "r", encoding="utf-8") as file:
             server_info = file.read().strip()
     except FileNotFoundError:
-        server_info = "Server information file not found."
+        server_info = ""
 
     # Build Discord embed
-    embed = discord.Embed(
-        title="🤖 Minecraft Server Help",
-        color=discord.Color.green()
-    )
+    embed = discord.Embed(title=MSG_HELP, color=discord.Color.green())
 
     embed.add_field(
         name="📋 Bot Commands",
@@ -298,20 +255,7 @@ async def help_command(interaction: discord.Interaction):
         inline=False
     )
 
-    # Discord embed fields have a 1024-character limit
-    # Split longer joining instructions into multiple fields
-    chunks = [
-        server_info[i:i + 1000]
-        for i in range(0, len(server_info), 1000)
-    ]
-
-    for index, chunk in enumerate(chunks):
-        embed.add_field(
-            name="🌍 How to Join" if index == 0 else "How to Join (continued)",
-            value=chunk,
-            inline=False
-        )
-
+    embed.add_field(name="🌍 How to Join", value=server_info, inline=False)
     await interaction.response.send_message(embed=embed)
 
 
@@ -444,85 +388,6 @@ async def godtext(interaction: discord.Interaction, message: str):
         )
 
 
-### WHITELIST ###
-
-whitelist_group = discord.app_commands.Group(
-    name="whitelist",
-    description="Manage the Minecraft whitelist (dev only)"
-)
-
-
-@whitelist_group.command(name="add", description="Add a player to the whitelist")
-async def whitelist_add(interaction: discord.Interaction, playername: str):
-    if not has_dev_permission(interaction):
-        return no_permission(interaction)
-
-    if not minecraft.is_server_running():
-        return server_is_not_running(interaction)
-
-    await interaction.response.defer(ephemeral=True)
-
-    try:
-        result = minecraft.send_command(f"whitelist add {playername}")
-        await interaction.followup.send(
-            f"✅ Whitelist add result:\n```{result or 'Command executed.'}```",
-            ephemeral=True
-        )
-    except Exception as e:
-        await interaction.followup.send(
-            f"❌ Failed to add player: `{e}`",
-            ephemeral=True
-        )
-
-
-@whitelist_group.command(name="remove", description="Remove a player from the whitelist")
-async def whitelist_remove(interaction: discord.Interaction, playername: str):
-    if not has_dev_permission(interaction):
-        return no_permission(interaction)
-
-    if not minecraft.is_server_running():
-        return server_is_not_running(interaction)
-
-    await interaction.response.defer(ephemeral=True)
-
-    try:
-        result = minecraft.send_command(f"whitelist remove {playername}")
-        await interaction.followup.send(
-            f"✅ Whitelist remove result:\n```{result or 'Command executed.'}```",
-            ephemeral=True
-        )
-    except Exception as e:
-        await interaction.followup.send(
-            f"❌ Failed to remove player: `{e}`",
-            ephemeral=True
-        )
-
-
-@whitelist_group.command(name="list", description="List all whitelisted players")
-async def whitelist_list(interaction: discord.Interaction):
-    if not has_dev_permission(interaction):
-        return no_permission(interaction)
-
-    if not minecraft.is_server_running():
-        return server_is_not_running(interaction)
-
-    await interaction.response.defer(ephemeral=True)
-
-    try:
-        result = minecraft.send_command("whitelist list")
-        if result:
-            result = "".join([f"{i+1}. {name}\n" for i, name in enumerate(result.split(": ")[1].split(", "))])
-
-        await interaction.followup.send(
-            f"📋 **Minecraft Whitelist:**\n```{result or 'The whitelist is empty.'}```",
-            ephemeral=True
-        )
-
-    except Exception as e:
-        await interaction.followup.send(
-            f"❌ Failed to retrieve whitelist: `{e}`",
-            ephemeral=True
-        )
 
 
 ### SHUTDOWNCONFIRMVIEW ###
