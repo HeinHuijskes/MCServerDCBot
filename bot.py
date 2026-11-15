@@ -83,6 +83,8 @@ async def chat_relay():
             _, name, verb, title = event
             icon = {"made the advancement": "🏆", "completed the challenge": "🌟", "reached the goal": "🎯"}[verb]
             text = f"{icon} **{esc(name)}** has {verb} **{esc(title)}**"
+        elif kind == "death":
+            text = f"💀 **{esc(event[1])}** {esc(event[2])}"
         else:  # other system messages, such as deaths
             text = f"ℹ️ {esc(event[1])}"
 

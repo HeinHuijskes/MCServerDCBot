@@ -10,13 +10,25 @@ _ADVANCEMENT = re.compile(
     r"^(?:System chat: )?(?P<name>\S+) has (?P<verb>made the advancement|completed the challenge|reached the goal) \[(?P<title>.+)\]$"
 )
 _SYSTEM = re.compile(r"^System chat: (?P<text>.+)$")
+# Minecraft's death messages: "<name> <phrase> ...". Add a phrase here if a death shows up as ℹ️.
+_DEATH_PHRASES = [
+    "died", "drowned", "blew up", "burned to death", "starved to death", "froze to death",
+    "suffocated", "withered away", "fell", "hit the ground", "tried to swim in lava",
+    "walked into", "went up in flames", "went off with a bang", "experienced kinetic energy",
+    "discovered the floor was lava", "left the confines of this world",
+    "didn't want to live in the same world as",
+    "was (?:shot|slain|killed|fireballed|pummeled|impaled|squashed|squished|stung|poked|pricked"
+    "|blown|roasted|doomed|obliterated|smashed|burned|frozen|knocked|struck|skewered)",
+]
+_DEATH = re.compile(r"^(?P<name>\S+) (?P<rest>(?:" + "|".join(_DEATH_PHRASES) + r")\b.*)$")
 # Command feedback shown to admins: "[Sender: Granted the advancement ...]"
 _COMMAND_FEEDBACK = re.compile(r"^\[[^\]:]+: .*\]$")
 
 
 def parse_log_line(line: str):
     """Return ("chat", name, text), ("join", name), ("leave", name),
-    ("advancement", name, verb, title), ("system", text) or None."""
+    ("advancement", name, verb, title), ("death", name, rest),
+    ("system", text) or None."""
     match = _LINE.match(line)
     if not match:
         return None
@@ -31,11 +43,14 @@ def parse_log_line(line: str):
     if m := _ADVANCEMENT.match(msg):
         return ("advancement", m["name"], m["verb"], m["title"])
     if m := _SYSTEM.match(msg):
-        if m["text"].startswith("[Discord] "):  # our own relayed messages
+        text = m["text"]
+        if text.startswith("[Discord] "):  # our own relayed messages
             return None
-        if _COMMAND_FEEDBACK.match(m["text"]):  # feedback from commands
+        if _COMMAND_FEEDBACK.match(text):  # feedback from commands
             return None
-        return ("system", m["text"])
+        if d := _DEATH.match(text):
+            return ("death", d["name"], d["rest"])
+        return ("system", text)
     return None
 
 
