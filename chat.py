@@ -10,6 +10,8 @@ _ADVANCEMENT = re.compile(
     r"^(?:System chat: )?(?P<name>\S+) has (?P<verb>made the advancement|completed the challenge|reached the goal) \[(?P<title>.+)\]$"
 )
 _SYSTEM = re.compile(r"^System chat: (?P<text>.+)$")
+# Command feedback shown to admins: "[Sender: Granted the advancement ...]"
+_COMMAND_FEEDBACK = re.compile(r"^\[[^\]:]+: .*\]$")
 
 
 def parse_log_line(line: str):
@@ -30,6 +32,8 @@ def parse_log_line(line: str):
         return ("advancement", m["name"], m["verb"], m["title"])
     if m := _SYSTEM.match(msg):
         if m["text"].startswith("[Discord] "):  # our own relayed messages
+            return None
+        if _COMMAND_FEEDBACK.match(m["text"]):  # feedback from commands
             return None
         return ("system", m["text"])
     return None
