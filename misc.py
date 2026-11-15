@@ -11,6 +11,14 @@ import re
 
 load_dotenv()
 
+REQUIRED_ENV = [
+    "DISCORD_TOKEN", "DISCORD_USER_ID", "DISCORD_CHANNEL_ID",
+    "DISCORD_ROLE_ID", "DEV_ROLE_ID", "RCON_PASSWORD",
+]
+missing = [name for name in REQUIRED_ENV if not os.getenv(name)]
+if missing:
+    raise SystemExit(f"Missing required .env variables: {', '.join(missing)}")
+
 ## ENV VARIABLES ##
 TOKEN = os.getenv("DISCORD_TOKEN")
 OWNER_ID = int(os.getenv("DISCORD_USER_ID", "0"))
@@ -19,9 +27,9 @@ ROLE_ID = int(os.getenv("DISCORD_ROLE_ID"))
 DEV_ROLE_ID = int(os.getenv("DEV_ROLE_ID"))
 
 ## PATHS ##
-main_path = "~/Projects/MCServerDCBOT"
-rules_path = f"{main_path}/info/server_rules.txt"
-info_path = f"{main_path}/info/server_info.txt"
+main_path = Path("~/Projects/MCServerDCBot").expanduser()
+rules_path = main_path / "info" / "server_rules.txt"
+info_path = main_path / "info" / "server_info.txt"
 
 
 ########################
@@ -70,10 +78,22 @@ def has_dev_permission(interaction: discord.Interaction):
     return False
 
 
-def dev_only(command):
-    '''Assign dev-only attribute, mainly for /help display purposes.'''
-    command.dev_only = True
-    return command
+def is_dev_only(command) -> bool:
+    '''True if the command, or any group above it, requires the dev role.'''
+    while command is not None:
+        if isinstance(command, DevGroup):
+            return True
+        if has_dev_permission in getattr(command, "checks", []):
+            return True
+        command = command.parent
+    return False
+
+
+async def server_is_running(interaction: discord.Interaction):
+    '''Pre-command check to see if the server is up and running.'''
+    if not await asyncio.to_thread(minecraft.is_server_running):
+        raise ServerOffline()
+    return True
 
 
 async def wait_for_server_ready(timeout=180):
@@ -93,20 +113,32 @@ async def wait_for_server_ready(timeout=180):
     return False
 
 
-def get_spark_health_url(timeout=5):
-    log_file = Path("/opt/minecraft/server/logs/latest.log")
-    start_time = time.time()
+LOG_FILE = Path("/opt/minecraft/server/logs/latest.log")
 
-    while time.time() - start_time < timeout:
+
+def get_log_size() -> int:
+    try:
+        return LOG_FILE.stat().st_size
+    except OSError:
+        return 0
+
+
+def get_spark_health_url(offset: int = 0, timeout: int = 5):
+    '''Find a Spark URL written to the log after `offset` bytes.'''
+    deadline = time.monotonic() + timeout
+
+    while time.monotonic() < deadline:
         try:
-            with log_file.open("r") as f:
-                lines = f.readlines()
+            # If the log shrank, it was rotated: read the new file from the start
+            start = offset if LOG_FILE.stat().st_size >= offset else 0
 
-            for line in reversed(lines):
-                match = re.search(r"https://spark\.lucko\.me/\S+", line)
-                if match:
-                    return match.group(0)
+            with LOG_FILE.open("rb") as f:
+                f.seek(start)
+                text = f.read().decode("utf-8", errors="ignore")
 
+            matches = re.findall(r"https://spark\.lucko\.me/\S+", text)
+            if matches:
+                return matches[-1]
         except OSError:
             pass
 
@@ -132,59 +164,49 @@ def get_tellraw_message(message):
     }
 
 
+class DevGroup(discord.app_commands.Group):
+    '''A command group whose subcommands all require the dev role.'''
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return has_dev_permission(interaction)
+
+
+class ServerOffline(discord.app_commands.CheckFailure):
+    pass
+
+
 class ShutdownConfirmView(discord.ui.View):
-    def __init__(self):
+    def __init__(self, interaction: discord.Interaction):
         super().__init__(timeout=60)
+        self.interaction = interaction  # the original /shutdown interaction
 
-    @discord.ui.button(
-        label="Confirm shutdown",
-        style=discord.ButtonStyle.danger,
-        emoji="🛑"
-    )
-    async def confirm(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
-    ):
+    @discord.ui.button(label="Confirm shutdown", style=discord.ButtonStyle.danger, emoji="🛑")
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.stop()  # prevents on_timeout from overwriting the result later
+
         if not has_dev_permission(interaction):
-            return no_permission(interaction)
+            return await no_permission(interaction)
 
-        if not minecraft.is_server_running():
-            await interaction.response.edit_message(
-                content="ℹ️ Minecraft is already offline.",
-                view=None
-            )
+        if not await asyncio.to_thread(minecraft.is_server_running):
+            await interaction.response.edit_message(content="ℹ️ Minecraft is already offline.", view=None)
             return
 
+        # Respond immediately, then do the slow RCON call
+        await interaction.response.edit_message(content="⏳ Sending shutdown command...", view=None)
         try:
-            minecraft.stop_server()
-
-            await interaction.response.edit_message(
-                content="🛑 **Shutdown command sent!** Minecraft is saving the world and shutting down.",
-                view=None
+            await asyncio.to_thread(minecraft.stop_server)
+            await interaction.edit_original_response(
+                content="🛑 **Shutdown command sent!** Minecraft is saving the world and shutting down."
             )
-
         except Exception as e:
-            await interaction.response.edit_message(
-                content=f"❌ Failed to shut down: `{e}`",
-                view=None
-            )
+            await interaction.edit_original_response(content=f"❌ Failed to shut down: `{e}`")
 
-    @discord.ui.button(
-        label="Cancel",
-        style=discord.ButtonStyle.secondary,
-        emoji="✖️"
-    )
-    async def cancel(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
-    ):
-        await interaction.response.edit_message(
-            content="✅ Shutdown cancelled.",
-            view=None
-        )
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary, emoji="✖️")
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.stop()
+        await interaction.response.edit_message(content="✅ Shutdown cancelled.", view=None)
 
     async def on_timeout(self):
-        for item in self.children:
-            item.disabled = True
+        try:
+            await self.interaction.edit_original_response(content="⌛ Shutdown confirmation expired.", view=None)
+        except discord.HTTPException:
+            pass
