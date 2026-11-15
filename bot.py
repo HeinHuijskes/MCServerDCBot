@@ -263,13 +263,12 @@ async def serverrules(interaction: discord.Interaction):
 
 @bot.tree.command(name="help", description="Show bot commands and server joining instructions")
 async def help_command(interaction: discord.Interaction):
-    command_list = []
+    user_commands, dev_commands = [], []
     for command in bot.tree.walk_commands():
         if isinstance(command, discord.app_commands.Group):
             continue
-        if is_dev_only(command):
-            continue
-        command_list.append(f"**/{command.qualified_name}**\n{command.description}")
+        entry = f"**/{command.qualified_name}**\n{command.description}"
+        (dev_commands if is_dev_only(command) else user_commands).append(entry)
 
     try:
         with open(info_path, "r", encoding="utf-8") as file:
@@ -278,9 +277,18 @@ async def help_command(interaction: discord.Interaction):
         server_info = ""
 
     embed = discord.Embed(title=MSG_HELP, color=discord.Color.green())
-    embed.add_field(name=MSG_COMMANDS, value="\n\n".join(command_list)[:1024], inline=False)
+    embed.add_field(name=MSG_COMMANDS, value="\n\n".join(user_commands)[:1024], inline=False)
     embed.add_field(name=MSG_HOWTO, value=server_info[:1024], inline=False)
     await interaction.response.send_message(embed=embed)
+
+    # Devs also get a private list of the dev-only commands
+    if dev_commands and has_dev_permission(interaction):
+        dev_embed = discord.Embed(
+            title=MSG_DEV_COMMANDS,
+            description="\n\n".join(dev_commands)[:4096],
+            color=discord.Color.orange(),
+        )
+        await interaction.followup.send(embed=dev_embed, ephemeral=True)
 
 
 ######################

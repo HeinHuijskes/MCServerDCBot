@@ -15,6 +15,7 @@ MSG_HOWTO = "🌍 **How to Join**"
 MSG_RULES = "📜 **Minecraft Server Rules**\n\n"
 MSG_SPARK = "📊 **Live Spark Health Dashboard:**\n"
 MSG_COMMANDS = "📋 **Bot Commands**"
+MSG_DEV_COMMANDS = "🛠️ Dev commands"
 MSG_WHITELIST = "📋 **Minecraft Whitelist:**\n"
 
 MSG_TOO_LONG = "❌ Your message is too long. Maximum length is 500 characters."
