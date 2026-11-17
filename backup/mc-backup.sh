@@ -26,6 +26,12 @@
 # (Backblaze B2, S3, Google Drive, etc. all work the same way after that).
 RCLONE_REMOTE="myremote:minecraft-backups"
 
+# Full path to the rclone.conf that actually has that remote in it. Find it
+# with `rclone config file` while logged in as the user who ran `rclone config`
+# (commonly ~/.config/rclone/rclone.conf). This is set explicitly because the
+# backup service may run as root, which otherwise looks in /root/ instead.
+RCLONE_CONFIG_PATH="/home/admin/.config/rclone/rclone.conf"
+
 # How many of the most recent backups to keep on the remote.
 RETAIN=5
 
@@ -40,16 +46,16 @@ SKIP_IF_RUNNING=true
 
 # Absolute paths to back up. Adjust to match your actual install.
 BACKUP_PATHS=(
-  "/opt/minecraft/world"
-  "/opt/minecraft/world_nether"
-  "/opt/minecraft/world_the_end"
-  "/opt/minecraft/whitelist.json"
-  "/opt/minecraft/usercache.json"
-  "/opt/minecraft/ops.json"
-  "/opt/minecraft/server.properties"
-  "/opt/minecraft/plugins"
-  "/opt/discord-bot/.env"
-  "/opt/discord-bot/info"
+  "/opt/minecraft/server/world"
+  "/opt/minecraft/server/world_nether"
+  "/opt/minecraft/server/world_the_end"
+  "/opt/minecraft/server/whitelist.json"
+  "/opt/minecraft/server/usercache.json"
+  "/opt/minecraft/server/ops.json"
+  "/opt/minecraft/server/server.properties"
+  "/opt/minecraft/server/plugins"
+  "/home/admin/Projects/MCServerDCBot/.env"
+  "/home/admin/Projects/MCServerDCBot/info"
   "/etc/nginx/sites-available"
   "/etc/cloudflared"
 )
@@ -98,8 +104,13 @@ if [ "${SERVER_RUNNING}" = true ]; then
     log "WARNING: ${MC_SERVICE} is running and SKIP_IF_RUNNING=false — backing up anyway."
 fi
 
+export RCLONE_CONFIG="${RCLONE_CONFIG_PATH}"
+
 log "Creating archive ${ARCHIVE_NAME}"
-tar czf "${ARCHIVE_PATH}" "${EXCLUDES[@]}" "${BACKUP_PATHS[@]}" 2>&1 \
+# --ignore-failed-read: don't abort the whole backup just because one listed
+# path doesn't exist right now (e.g. world_nether/world_the_end before anyone
+# has visited them yet). Real permission errors will still show up in the log.
+tar czf "${ARCHIVE_PATH}" --ignore-failed-read "${EXCLUDES[@]}" "${BACKUP_PATHS[@]}" 2>&1 \
     | grep -v "Removing leading" || true
 
 log "Uploading to ${RCLONE_REMOTE}"
