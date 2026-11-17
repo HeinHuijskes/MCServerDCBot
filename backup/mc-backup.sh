@@ -24,7 +24,7 @@
 
 # Where backups go. Run `rclone config` once first to set this remote up
 # (Backblaze B2, S3, Google Drive, etc. all work the same way after that).
-RCLONE_REMOTE="myremote:minecraft-backups"
+RCLONE_REMOTE="minecraft-backup-drive"
 
 # Full path to the rclone.conf that actually has that remote in it. Find it
 # with `rclone config file` while logged in as the user who ran `rclone config`
