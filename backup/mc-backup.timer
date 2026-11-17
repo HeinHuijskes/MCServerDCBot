@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Minecraft backup daily
+
+[Timer]
+# 04:17 — off-peak, slightly offset from the top of the hour.
+OnCalendar=*-*-* 04:17:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

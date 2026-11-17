@@ -10,13 +10,13 @@ import re
 from mcbot import minecraft, advancements, playtime
 from mcbot.constants import *
 from mcbot.misc import (
-    TOKEN, CHANNEL_ID, CHAT_CHANNEL_ID, RULES_PATH, INFO_PATH,
+    TOKEN, CHANNEL_ID, CHAT_CHANNEL_ID, RULES_PATH, INFO_PATH, MAP_URL,
     send_message, follow_up, LOG_FILE, SERVER_DIR,
     server_is_running, has_permission, has_dev_permission,
     DevGroup, PlayerGroup, ServerOffline, is_dev_only,
     ShutdownConfirmView, wait_for_server_ready,
     get_log_size, get_spark_health_url, get_tellraw_message,
-    send_relay, head_url, get_head_emoji
+    send_relay, head_url, get_head_emoji, get_installed_plugins
 )
 
 from mcbot.chat import LogTailer, parse_log_line
@@ -192,6 +192,17 @@ async def notify_channel(message):
 #############################
 
 
+@bot.tree.command(name="map", description="Get the link to the live map")
+@discord.app_commands.guild_only()
+@check(has_permission)
+async def map_command(interaction: discord.Interaction):
+    if not await asyncio.to_thread(minecraft.is_server_running):
+        await send_message(interaction, MSG_OFFLINE, ephemeral=True)
+        return
+
+    await send_message(interaction, f"{MSG_MAP}{MAP_URL}")
+
+
 @bot.tree.command(name="serverstatus", description="Check Minecraft server status")
 @discord.app_commands.guild_only()
 @check(has_permission)
@@ -258,10 +269,14 @@ async def serverrules(interaction: discord.Interaction):
             rules = file.read().strip()
     except FileNotFoundError:
         rules = ""
-    await send_message(interaction, f"{MSG_RULES}{rules}")
+
+    plugins = await asyncio.to_thread(get_installed_plugins)
+    plugin_list = "\n".join(f"• {name}" for name in plugins) if plugins else "None installed."
+
+    await send_message(interaction, f"{MSG_RULES}{rules}\n\n{MSG_PLUGINS}{plugin_list}"[:1990])
 
 
-@bot.tree.command(name="help", description="Show bot commands and server joining instructions")
+@bot.tree.command(name="help", description="Show bot commands")
 async def help_command(interaction: discord.Interaction):
     user_commands, dev_commands = [], []
     for command in bot.tree.walk_commands():
@@ -270,15 +285,8 @@ async def help_command(interaction: discord.Interaction):
         entry = f"**/{command.qualified_name}**\n{command.description}"
         (dev_commands if is_dev_only(command) else user_commands).append(entry)
 
-    try:
-        with open(INFO_PATH, "r", encoding="utf-8") as file:
-            server_info = file.read().strip()
-    except FileNotFoundError:
-        server_info = ""
-
     embed = discord.Embed(title=MSG_HELP, color=discord.Color.green())
     embed.add_field(name=MSG_COMMANDS, value="\n\n".join(user_commands)[:1024], inline=False)
-    embed.add_field(name=MSG_HOWTO, value=server_info[:1024], inline=False)
     await interaction.response.send_message(embed=embed)
 
     # Devs also get a private list of the dev-only commands
@@ -289,6 +297,19 @@ async def help_command(interaction: discord.Interaction):
             color=discord.Color.orange(),
         )
         await interaction.followup.send(embed=dev_embed, ephemeral=True)
+
+
+@bot.tree.command(name="howto", description="Show server joining instructions")
+async def howto_command(interaction: discord.Interaction):
+    try:
+        with open(INFO_PATH, "r", encoding="utf-8") as file:
+            server_info = file.read().strip()
+    except FileNotFoundError:
+        server_info = ""
+
+    embed = discord.Embed(title=MSG_HOWTO, color=discord.Color.green())
+    embed.description = server_info[:4096]
+    await interaction.response.send_message(embed=embed)
 
 
 ######################

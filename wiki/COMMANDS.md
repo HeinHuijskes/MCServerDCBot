@@ -5,10 +5,12 @@ Access levels: **everyone**, **MC Player** (the player role) and **dev** (the de
 
 | Command | Access | What it does |
 |---|---|---|
-| `/help` | everyone | Lists the commands you can use plus the joining instructions. Devs also get a private (only visible to them) list of dev commands |
-| `/serverrules` | everyone | Shows the server rules |
+| `/help` | everyone | Lists the commands you can use. Devs also get a private (only visible to them) list of dev commands |
+| `/howto` | everyone | Lists the joining instructions as read from `info/server_info.txt` |
+| `/serverrules` | everyone | Shows the server rules and installed plugins |
 | `/serverstatus` | MC Player | Shows whether the server is online and who is playing, with head icons |
 | `/startserver` | MC Player | Starts the server and announces when it is ready |
+| `/map` | MC Player | Outputs a link to squaremap's live map when the MC server is live. |
 | `/advanced show <player>` | MC Player | A player's advancement progress and their 5 most recent advancements |
 | `/advanced top` | MC Player | Advancement leaderboard (top 10) |
 | `/shutdown` | dev | Stops the server after a confirmation button |

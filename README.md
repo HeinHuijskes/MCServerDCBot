@@ -24,6 +24,8 @@ The `wiki/` folder contains a lot of additional information about different part
 - [Security](./wiki/SECURITY.md#security)
   - [Privacy and external services](./wiki/SECURITY.md#privacy-and-external-services)
 - [Troubleshooting](./wiki/DEBUG.md#troubleshooting)
+- [Network configuration](./wiki/NETWORK.md#network-configuration)
+- [Backups](./wiki/BACKUP.md#backups)
 
 ## Features
 
@@ -88,6 +90,7 @@ setup.sh                  Creates the virtual environment and installs dependenc
 - **discord.py 2.5 or newer** (needed for the player head emojis; `requirements.txt` is not pinned, so a fresh install gets the latest)
 - A **Paper** server with RCON enabled, running as the systemd service `minecraft.service`
 - A **Discord application** with a bot user
-
+- `mcrcon`
+- `rclone`
 
 

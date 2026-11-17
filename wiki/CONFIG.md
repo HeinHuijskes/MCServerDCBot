@@ -1,6 +1,20 @@
 
 ## Configuration reference
 
+### Environment variables
+| Variable name | Obtained at | Explanation | 
+|---|---|---|
+| DISCORD_TOKEN | Discord Developer Portal | Bot authentication token, generated |
+| RCON_HOST | Default value in `.env.example` | MCRCON IP (`127.0.0.1` when run locally) |
+| RCON_PORT | Default value in `.env.example` | MCRCON IP (standard `25575`) |
+| RCON_PASSWORD | Configured with mcrcon | Password used to connect to MCRCON |
+| DISCORD_USER_ID | Discord (Developer Mode enabled) | ID of the owner of the Discord server |
+| DISCORD_CHANNEL_ID | Discord Server | ID of the channel the bot will be sending responses in |
+| DISCORD_ROLE_ID | Discord Server | ID of MC Player role |
+| DEV_ROLE_ID | Discord Server | ID of dev role |
+| MAP_URL | DNS Configuration | URL that points to the Pi, where Nginx redirects it to the local squaremap URL |
+
+### Other values
 Besides `.env`, a few values live in the code:
 
 | Setting | Where | Default |

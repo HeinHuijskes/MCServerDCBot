@@ -1,0 +1,13 @@
+[Unit]
+Description=Minecraft server + bot backup to cloud storage
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+# Run as the same user who owns the Minecraft/bot files and can run
+# `systemctl is-active` and talk to the rclone config for that user.
+# If this needs root (e.g. to read /etc/nginx, /etc/cloudflared), leave as root
+# but make sure `rclone config file` points at the right config, e.g. by setting:
+# Environment=RCLONE_CONFIG=/home/pi/.config/rclone/rclone.conf
+ExecStart=/usr/local/bin/mc-backup.sh

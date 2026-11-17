@@ -28,13 +28,13 @@ CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID", "0"))
 ROLE_ID = int(os.getenv("DISCORD_ROLE_ID"))
 DEV_ROLE_ID = int(os.getenv("DEV_ROLE_ID"))
 CHAT_CHANNEL_ID = int(os.getenv("DISCORD_CHAT_CHANNEL_ID", "0"))
+MAP_URL = os.getenv("MAP_URL")
 
 ## PATHS ##
 RULES_PATH = PROJECT_ROOT / "info" / "server_rules.txt"
 INFO_PATH = PROJECT_ROOT / "info" / "server_info.txt"
 SERVER_DIR = Path("/opt/minecraft/server")
 LOG_FILE = Path("/opt/minecraft/server/logs/latest.log")
-
 
 ## CHAT LOGGING WEBHOOK ##
 log = logging.getLogger("mcbot")   # same logger as in bot.py, matched by name
@@ -101,6 +101,18 @@ def is_dev_only(command) -> bool:
             return True
         command = command.parent
     return False
+
+
+def get_installed_plugins():
+    """Return the sorted list of installed plugin names (jar files in plugins/)."""
+    plugins_dir = os.path.join(SERVER_DIR, "plugins")
+    try:
+        return sorted(
+            name[:-4] for name in os.listdir(plugins_dir)
+            if name.lower().endswith(".jar")
+        )
+    except FileNotFoundError:
+        return []
 
 
 async def server_is_running(interaction: discord.Interaction):

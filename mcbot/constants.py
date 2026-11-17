@@ -9,14 +9,15 @@ MSG_SHUTTING = "**Shutdown command sent!** Minecraft is saving the world and shu
 MSG_NO_SHUT = "Shutdown cancelled."
 MSG_CONFIRM_SHUTDOWN = "⚠️ **Are you sure you want to shut down Minecraft?**\n" \
     "The world will be saved before the server stops."
-
+MSG_MAP = "🗺️ Live map: "
 MSG_HELP = "🤖 **Minecraft Server Help**"
 MSG_HOWTO = "🌍 **How to Join**"
 MSG_RULES = "📜 **Minecraft Server Rules**\n\n"
 MSG_SPARK = "📊 **Live Spark Health Dashboard:**\n"
+MSG_PLUGINS = "**Installed plugins:**\n"
 MSG_COMMANDS = "📋 **Bot Commands**"
-MSG_DEV_COMMANDS = "🛠️ Dev commands"
 MSG_WHITELIST = "📋 **Minecraft Whitelist:**\n"
+MSG_DEV_COMMANDS = "🛠️ Dev commands"
 
 MSG_TOO_LONG = "❌ Your message is too long. Maximum length is 500 characters."
 MSG_INVALID = "Invalid input."
