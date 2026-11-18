@@ -1,16 +1,13 @@
-MINECRAFT SERVER RULES
-
 1. Chill bro
 2. Don't build automatic farms too big
 
-GAME SETTINGS
+**Game settings**
 
 - Current version: <version>
 - Gamemode: <gamemode>
 
-PLUGINS & SERVER
+**Game rules set**
+- <rule>
 
-- <servertype>
-- <plugin>
-- <plugin>
-- <plugin>
+**Server**
+- <servertype> <version>

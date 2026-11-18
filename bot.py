@@ -275,7 +275,7 @@ async def serverrules(interaction: discord.Interaction):
         rules = ""
 
     plugins = await asyncio.to_thread(get_installed_plugins)
-    plugin_list = "\n".join(f"• {name}" for name in plugins) if plugins else "None installed."
+    plugin_list = "\n".join(f"- {name}" for name in plugins) if plugins else "None installed."
 
     await send_message(interaction, f"{MSG_RULES}{rules}\n\n{MSG_PLUGINS}{plugin_list}"[:1990])
 
