@@ -146,7 +146,7 @@ async def wait_for_server_ready(timeout=180):
 async def get_death_coords(player: str) -> str | None:
     """Read the player's LastDeathLocation NBT tag"""
     try:
-        resp = await minecraft.rcon(f"data get entity {player} LastDeathLocation")
+        resp = minecraft.send_command(f"data get entity {player} LastDeathLocation")
     except Exception:
         log.warning("RCON failed fetching LastDeathLocation for %s", player)
         return None

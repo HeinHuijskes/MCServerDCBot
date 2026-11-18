@@ -93,7 +93,7 @@ async def chat_relay():
             coords = await get_death_coords(name)
             text = f"💀 **{esc(name)}** {esc(message)}"
             if coords:
-                text += f" (`at {coords}`)"
+                text += f" (`{coords}`)"
         else:
             text = f"ℹ️ {esc(event[1])}"
 
