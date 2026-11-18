@@ -14,7 +14,7 @@ from mcbot.misc import (
     send_message, follow_up, LOG_FILE, SERVER_DIR,
     server_is_running, has_permission, has_dev_permission,
     DevGroup, PlayerGroup, ServerOffline, is_dev_only,
-    ShutdownConfirmView, wait_for_server_ready,
+    ShutdownConfirmView, wait_for_server_ready, get_death_coords,
     get_log_size, get_spark_health_url, get_tellraw_message,
     send_relay, head_url, get_head_emoji, get_installed_plugins
 )
@@ -89,7 +89,11 @@ async def chat_relay():
             icon = {"made the advancement": "🏆", "completed the challenge": "🌟", "reached the goal": "🎯"}[verb]
             text = f"{icon} **{esc(name)}** has {verb} **{esc(title)}**"
         elif kind == "death":
-            text = f"💀 **{esc(event[1])}** {esc(event[2])}"
+            _, name, message = event
+            coords = await get_death_coords(name)
+            text = f"💀 **{esc(name)}** {esc(message)}"
+            if coords:
+                text += f" (`at {coords}`)"
         else:
             text = f"ℹ️ {esc(event[1])}"
 

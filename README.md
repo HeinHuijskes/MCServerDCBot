@@ -90,7 +90,3 @@ setup.sh                  Creates the virtual environment and installs dependenc
 - **discord.py 2.5 or newer** (needed for the player head emojis; `requirements.txt` is not pinned, so a fresh install gets the latest)
 - A **Paper** server with RCON enabled, running as the systemd service `minecraft.service`
 - A **Discord application** with a bot user
-- `mcrcon`
-- `rclone`
-
-

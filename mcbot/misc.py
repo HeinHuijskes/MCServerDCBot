@@ -45,6 +45,10 @@ webhooks_disabled = False
 head_emojis = {}
 head_emojis_loaded = False
 
+## POSITION NBT REGEX ##
+POS_RE = re.compile(r'pos:\s*\[I;\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)\]')
+DIM_RE = re.compile(r'dimension:\s*"([^"]+)"')
+
 
 ########################
 ### HELPER FUNCTIONS ###
@@ -137,6 +141,25 @@ async def wait_for_server_ready(timeout=180):
             await asyncio.sleep(5)
 
     return False
+
+
+async def get_death_coords(player: str) -> str | None:
+    """Read the player's LastDeathLocation NBT tag"""
+    try:
+        resp = await minecraft.rcon(f"data get entity {player} LastDeathLocation")
+    except Exception:
+        log.warning("RCON failed fetching LastDeathLocation for %s", player)
+        return None
+
+    pos_match = POS_RE.search(resp)
+    if not pos_match:
+        return None
+
+    x, y, z = pos_match.groups()
+    dim_match = DIM_RE.search(resp)
+    dim = dim_match.group(1).removeprefix("minecraft:") if dim_match else "overworld"
+    suffix = f" in {dim}" if dim != "overworld" else ""
+    return f"{x}, {y}, {z}{suffix}"
 
 
 def get_log_size() -> int:
